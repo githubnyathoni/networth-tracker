@@ -4,11 +4,10 @@ import { Platform } from 'react-native';
 const COINGECKO = 'https://api.coingecko.com/api/v3';
 const EXCHANGE_RATE = 'https://api.exchangerate-api.com/v4/latest/USD';
 
-const YAHOO_ORIGIN = 'https://query1.finance.yahoo.com/v8/finance/chart';
-// Yahoo Finance blocks browser requests (no CORS headers); proxy only for web
-const YAHOO = Platform.OS === 'web'
-  ? `https://corsproxy.io/?${encodeURIComponent(YAHOO_ORIGIN)}`
-  : YAHOO_ORIGIN;
+const YAHOO_DIRECT = 'https://query1.finance.yahoo.com/v8/finance/chart';
+const API_BASE = (): string =>
+  (typeof process !== 'undefined' && (process.env as any)?.EXPO_PUBLIC_API_URL) ||
+  'http://localhost:3000';
 
 const IDX_DOMAINS: Record<string, string> = {
   BBCA: 'bca.co.id',
@@ -79,20 +78,20 @@ export function getStockLogoUrl(ticker: string): string | undefined {
   return `https://www.google.com/s2/favicons?sz=128&domain=${domain}`;
 }
 
-export async function fetchStockPriceIdr(ticker: string, usdToIdr: number): Promise<number | null> {
+export async function fetchStockPriceIdr(ticker: string, _usdToIdr: number): Promise<number | null> {
   try {
-    // IDX tickers use .JK suffix on Yahoo Finance
+    if (Platform.OS === 'web') {
+      // On web, route through our own Express server to avoid CORS restrictions
+      const { data } = await axios.get(`${API_BASE()}/api/price/stock/${ticker}`, { timeout: 8000 });
+      return data.price ?? null;
+    }
+    // On native, call Yahoo Finance directly
     const symbol = ticker.includes('.') ? ticker : `${ticker}.JK`;
-    const url = Platform.OS === 'web'
-      ? `https://corsproxy.io/?${encodeURIComponent(`${YAHOO_ORIGIN}/${symbol}?interval=1d&range=1d`)}`
-      : `${YAHOO_ORIGIN}/${symbol}`;
-    const { data } = await axios.get(url, {
-      params: Platform.OS === 'web' ? undefined : { interval: '1d', range: '1d' },
+    const { data } = await axios.get(`${YAHOO_DIRECT}/${symbol}`, {
+      params: { interval: '1d', range: '1d' },
       timeout: 8000,
     });
-    const price: number = data.chart.result[0].meta.regularMarketPrice;
-    // Yahoo returns IDX prices in IDR already
-    return price;
+    return data.chart.result[0].meta.regularMarketPrice;
   } catch {
     return null;
   }

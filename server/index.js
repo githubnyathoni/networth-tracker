@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const https = require('https');
 const pool = require('./db');
 
 const app = express();
@@ -38,6 +39,30 @@ function rowToAsset(row) {
       : row.last_updated,
   };
 }
+
+// ── Price proxy (avoids CORS on browser clients) ──────────────────────────
+
+app.get('/api/price/stock/:ticker', (req, res) => {
+  const symbol = req.params.ticker.includes('.')
+    ? req.params.ticker
+    : `${req.params.ticker}.JK`;
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
+
+  https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, (upstream) => {
+    let body = '';
+    upstream.on('data', (chunk) => { body += chunk; });
+    upstream.on('end', () => {
+      try {
+        const json = JSON.parse(body);
+        const price = json?.chart?.result?.[0]?.meta?.regularMarketPrice;
+        if (price == null) return res.status(502).json({ error: 'Price not found' });
+        res.json({ price });
+      } catch {
+        res.status(502).json({ error: 'Invalid response from Yahoo Finance' });
+      }
+    });
+  }).on('error', (err) => res.status(502).json({ error: err.message }));
+});
 
 // ── Assets ─────────────────────────────────────────────────────────────────
 
