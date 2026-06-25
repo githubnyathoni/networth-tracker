@@ -29,9 +29,12 @@ interface AssetStore {
   saveToStorage: () => Promise<void>;
 }
 
-const API = (): string =>
-  (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_API_URL) ||
-  'http://localhost:3000';
+const API = (): string => {
+  const env = (typeof process !== 'undefined' && (process.env as any)?.EXPO_PUBLIC_API_URL) || '';
+  if (env) return env;
+  if (typeof window !== 'undefined') return ''; // web production: same origin as Express
+  return 'http://localhost:3000'; // native dev fallback
+};
 
 function apiFetch(path: string, options?: RequestInit) {
   return fetch(`${API()}${path}`, options).catch(() => null);

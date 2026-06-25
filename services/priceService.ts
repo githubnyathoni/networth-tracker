@@ -5,9 +5,16 @@ const COINGECKO = 'https://api.coingecko.com/api/v3';
 const EXCHANGE_RATE = 'https://api.exchangerate-api.com/v4/latest/USD';
 
 const YAHOO_DIRECT = 'https://query1.finance.yahoo.com/v8/finance/chart';
-const API_BASE = (): string =>
-  (typeof process !== 'undefined' && (process.env as any)?.EXPO_PUBLIC_API_URL) ||
-  'http://localhost:3000';
+
+// On web the Express server serves both the static app and the API on the
+// same origin, so relative URLs work in production without any env var.
+// In dev (Expo on :8081, Express on :3000) set EXPO_PUBLIC_API_URL=http://localhost:3000.
+const API_BASE = (): string => {
+  const env = (typeof process !== 'undefined' && (process.env as any)?.EXPO_PUBLIC_API_URL) || '';
+  if (env) return env;
+  if (typeof window !== 'undefined') return ''; // web production: same origin
+  return 'http://localhost:3000'; // native dev fallback
+};
 
 const IDX_DOMAINS: Record<string, string> = {
   BBCA: 'bca.co.id',
